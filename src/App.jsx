@@ -486,6 +486,184 @@ function RentalsPage({
     </>
   );
 }
+// -------------------- PROJECTS PAGE --------------------
+
+function ProjectsPage({
+  token,
+  savedListings,
+  logout,
+}) {
+  const navigate = useNavigate();
+
+  const [projects, setProjects] = useState([]);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function fetchProjects(authToken, currentOffset) {
+    try {
+      setLoading(true);
+      setError("");
+
+      const response = await fetch(
+        `${API}/v1/projects?limit=20&offset=${currentOffset}`,
+        {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+            "X-API-Key": API_KEY,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || `API error: ${response.status}`
+        );
+      }
+
+      setProjects(data.results || []);
+      setHasMore(data.has_more || false);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (token) {
+      fetchProjects(token, offset);
+    }
+  }, [token, offset]);
+
+  return (
+    <>
+      <Navbar
+        navigate={navigate}
+        savedCount={savedListings.length}
+        logout={logout}
+      />
+
+      <main>
+        <div className="hero">
+          <h2>Projects</h2>
+          <p>
+            Browse residential projects available on Ivy Homes
+          </p>
+        </div>
+
+        {error && (
+          <p className="error">Error: {error}</p>
+        )}
+
+        {loading && <p>Loading projects...</p>}
+
+        {!loading && !error && (
+          <>
+            <p>
+              Showing {projects.length} projects on this page
+            </p>
+
+            <div className="grid">
+              {projects.map((project) => (
+                <div
+                  className="card"
+                  key={project.project_id}
+                >
+                  <h3>
+                    {project.apartment_name ||
+                      "Residential Project"}
+                  </h3>
+
+                  <p>
+                    Developer:{" "}
+                    {project.developer_name || "-"}
+                  </p>
+
+                  <p>
+                    {project.locality ||
+                      "Location unavailable"}
+                  </p>
+
+                  <p>
+                    Status:{" "}
+                    {project.project_status || "-"}
+                  </p>
+
+                  <p>
+                    Area:{" "}
+                    {project.min_area_sqft || "-"} -{" "}
+                    {project.max_area_sqft || "-"} sq ft
+                  </p>
+
+                  <strong>
+                    ₹
+                    {Number(
+                      project.price_min || 0
+                    ).toLocaleString("en-IN")}
+                    {" - "}
+                    ₹
+                    {Number(
+                      project.price_max || 0
+                    ).toLocaleString("en-IN")}
+                  </strong>
+
+                  <p>
+                    Total Units:{" "}
+                    {project.total_units || "-"}
+                  </p>
+
+                  <p>
+                    Total Listings:{" "}
+                    {project.total_listings || "-"}
+                  </p>
+
+                  <p>
+                    RERA:{" "}
+                    {project.rera_number || "-"}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {projects.length === 0 && (
+              <p>No projects found.</p>
+            )}
+
+            <div className="pagination">
+              <button
+                disabled={offset === 0 || loading}
+                onClick={() =>
+                  setOffset(offset - 20)
+                }
+              >
+                Previous
+              </button>
+
+              <span>
+                Showing {offset + 1}–
+                {offset + projects.length}
+              </span>
+
+              <button
+                disabled={!hasMore || loading}
+                onClick={() =>
+                  setOffset(offset + 20)
+                }
+              >
+                Next
+              </button>
+            </div>
+          </>
+        )}
+      </main>
+    </>
+  );
+}
 
 // -------------------- SAVED PAGE --------------------
 
@@ -967,7 +1145,16 @@ function App() {
               />
             }
           />
-
+          <Route
+  path="/projects"
+  element={
+    <ProjectsPage
+      token={token}
+      logout={logout}
+      savedListings={savedListings}
+    />
+  }
+/>
           <Route
             path="/saved"
             element={
