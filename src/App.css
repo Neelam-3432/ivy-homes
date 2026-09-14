@@ -203,7 +203,7 @@ main {
   gap: 10px;
 }
 
-.save-button {
+/* .save-button {
   margin-top: 15px;
   padding: 9px 15px;
   border: 1px solid #ccc;
@@ -211,8 +211,29 @@ main {
   background: white;
   cursor: pointer;
   font-weight: bold;
+} */
+
+.save-button {
+  margin-top: 15px;
+  padding: 9px 15px;
+  border: 1px solid #ccc;
+   background: white;
+  color: black;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-weight: bold;
 }
 
+.save-button.saved {
+  background: #e8f5e9;
+  border-color: #4caf50;
+  color: #2e7d32;
+}
+
+.save-button:hover {
+  transform: translateY(-1px);
+}
 .detail-save {
   margin-bottom: 20px;
 }
@@ -230,4 +251,18 @@ main {
   border: none;
   border-radius: 6px;
   cursor: pointer;
+}
+.view-details {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 9px 15px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.view-details:hover {
+  transform: translateY(-1px);
 }

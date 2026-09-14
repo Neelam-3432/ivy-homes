@@ -11,13 +11,111 @@ import "./App.css";
 const API =
   import.meta.env.VITE_BASE_URL || "https://solve.ivy.homes";
 const API_KEY = import.meta.env.VITE_API_KEY;
+async function refreshAccessToken() {
+  const refreshToken = sessionStorage.getItem("refresh_token");
 
+  if (!refreshToken) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(
+      `${API}/auth/refresh`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": API_KEY,
+        },
+        body: JSON.stringify({
+          refresh_token: refreshToken,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return null;
+    }
+
+    sessionStorage.setItem(
+      "token",
+      data.access_token
+    );
+
+    if (data.refresh_token) {
+      sessionStorage.setItem(
+        "refresh_token",
+        data.refresh_token
+      );
+    }
+
+    return data.access_token;
+  } catch {
+    return null;
+  }
+}
+
+
+async function apiFetch(endpoint, options = {}, token) {
+  let accessToken = token;
+
+  const makeRequest = async (currentToken) => {
+    return fetch(`${API}${endpoint}`, {
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+        Authorization: `Bearer ${currentToken}`,
+        "X-API-Key": API_KEY,
+      },
+    });
+  };
+
+  let response = await makeRequest(accessToken);
+
+  // Access token expired → refresh it once
+  if (response.status === 401) {
+    const newToken = await refreshAccessToken();
+
+    if (!newToken) {
+      throw new Error("Session expired. Please login again.");
+    }
+
+    response = await makeRequest(newToken);
+  }
+
+  return response;
+}
 // -------------------- SAVED LISTINGS --------------------
+
+// function getSavedListings() {
+//   try {
+//     return JSON.parse(
+//       localStorage.getItem("savedListings") || "[]"
+//     );
+//   } catch {
+//     return [];
+//   }
+// }
+
+// function saveSavedListings(savedListings) {
+//   localStorage.setItem(
+//     "savedListings",
+//     JSON.stringify(savedListings)
+//   );
+// }
 
 function getSavedListings() {
   try {
+    const email = sessionStorage.getItem("user_email");
+
+    if (!email) {
+      return [];
+    }
+
     return JSON.parse(
-      localStorage.getItem("savedListings") || "[]"
+      localStorage.getItem(`savedListings_${email}`) || "[]"
     );
   } catch {
     return [];
@@ -25,12 +123,17 @@ function getSavedListings() {
 }
 
 function saveSavedListings(savedListings) {
+  const email = sessionStorage.getItem("user_email");
+
+  if (!email) {
+    return;
+  }
+
   localStorage.setItem(
-    "savedListings",
+    `savedListings_${email}`,
     JSON.stringify(savedListings)
   );
 }
-
 // -------------------- NAVBAR --------------------
 
 function Navbar({
@@ -89,7 +192,7 @@ function ListingsPage({
   const [locality, setLocality] = useState("");
   const [bedroom, setBedroom] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
-
+  const [furnishing, setFurnishing] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -98,15 +201,20 @@ function ListingsPage({
       setLoading(true);
       setError("");
 
-      const response = await fetch(
-        `${API}/v1/listings?limit=20&offset=${currentOffset}`,
-        {
-          headers: {
-            Authorization: `Bearer ${authToken}`,
-            "X-API-Key": API_KEY,
-          },
-        }
-      );
+      // const response = await fetch(
+      //   `${API}/v1/listings?limit=20&offset=${currentOffset}`,
+      //   {
+      //     headers: {
+      //       Authorization: `Bearer ${authToken}`,
+      //       "X-API-Key": API_KEY,
+      //     },
+      //   }
+      // );
+      const response = await apiFetch(
+  `/v1/listings?limit=20&offset=${currentOffset}`,
+  {},
+  authToken
+);
 
       const data = await response.json();
 
@@ -131,30 +239,63 @@ function ListingsPage({
     }
   }, [token, offset]);
 
+  // const filteredListings = listings.filter((listing) => {
+  //   const localityMatch =
+  //     !locality ||
+  //     listing.locality
+  //       ?.toLowerCase()
+  //       .includes(locality.toLowerCase());
+
+  //   const bedroomMatch =
+  //     !bedroom ||
+  //     Number(listing.bedroom) === Number(bedroom);
+
+  //   const priceMatch =
+  //     !maxPrice ||
+  //     Number(listing.price) <= Number(maxPrice);
+
+  //   return localityMatch && bedroomMatch && priceMatch;
+  // });
+
+  // function clearFilters() {
+  //   setLocality("");
+  //   setBedroom("");
+  //   setMaxPrice("");
+  // }
   const filteredListings = listings.filter((listing) => {
-    const localityMatch =
-      !locality ||
-      listing.locality
-        ?.toLowerCase()
-        .includes(locality.toLowerCase());
+  const localityMatch =
+    !locality ||
+    listing.locality
+      ?.toLowerCase()
+      .includes(locality.toLowerCase());
 
-    const bedroomMatch =
-      !bedroom ||
-      Number(listing.bedroom) === Number(bedroom);
+  const bedroomMatch =
+    !bedroom ||
+    Number(listing.bedroom) === Number(bedroom);
 
-    const priceMatch =
-      !maxPrice ||
-      Number(listing.price) <= Number(maxPrice);
+  const priceMatch =
+    !maxPrice ||
+    Number(listing.price) <= Number(maxPrice);
 
-    return localityMatch && bedroomMatch && priceMatch;
-  });
+  const furnishingMatch =
+    !furnishing ||
+    listing.furnishing?.toLowerCase() ===
+      furnishing.toLowerCase();
 
-  function clearFilters() {
-    setLocality("");
-    setBedroom("");
-    setMaxPrice("");
-  }
+  return (
+    localityMatch &&
+    bedroomMatch &&
+    priceMatch &&
+    furnishingMatch
+  );
+});
 
+function clearFilters() {
+  setLocality("");
+  setBedroom("");
+  setMaxPrice("");
+  setFurnishing("");
+}
   return (
     <>
       <Navbar
@@ -202,7 +343,7 @@ function ListingsPage({
                 <option value="4">4 BHK</option>
               </select>
 
-              <input
+              {/* <input
                 type="number"
                 placeholder="Max price"
                 value={maxPrice}
@@ -211,7 +352,31 @@ function ListingsPage({
                 }
               />
 
-              <button onClick={clearFilters}>
+              <button onClick={clearFilters}> */}
+              <input
+  type="number"
+  placeholder="Max price"
+  value={maxPrice}
+  onChange={(e) =>
+    setMaxPrice(e.target.value)
+  }
+/>
+
+<select
+  value={furnishing}
+  onChange={(e) =>
+    setFurnishing(e.target.value)
+  }
+>
+  <option value="">All Furnishing</option>
+  <option value="furnished">Furnished</option>
+  <option value="semi-furnished">
+    Semi-Furnished
+  </option>
+  <option value="unfurnished">Unfurnished</option>
+</select>
+
+<button onClick={clearFilters}>
                 Clear
               </button>
             </div>
@@ -264,11 +429,11 @@ function ListingsPage({
                       </strong>
 
                       <p className="view-details">
-                        View details →
+                        View Details →
                       </p>
                     </div>
 
-                    <button
+                    {/* <button
                       className="save-button"
                       onClick={() =>
                         toggleSaved(listing.listing_id)
@@ -277,7 +442,22 @@ function ListingsPage({
                       {isSaved
                         ? "♥ Saved"
                         : "♡ Save"}
-                    </button>
+                    </button> */}
+                    <button
+  className={`save-button ${
+    isSaved ? "saved" : ""
+  }`}
+  onClick={() =>
+    toggleSaved(listing.listing_id)
+  }
+  title={
+    isSaved
+      ? "Remove from saved listings"
+      : "Save this listing"
+  }
+>
+  {isSaved ? "♥ Saved" : "♡ Save"}
+</button>
                   </div>
                 );
               })}
@@ -341,15 +521,20 @@ function RentalsPage({
       setLoading(true);
       setError("");
 
-      const response = await fetch(
-        `${API}/v1/rentals?limit=20&offset=${currentOffset}`,
-        {
-          headers: {
-            Authorization: `Bearer ${authToken}`,
-            "X-API-Key": API_KEY,
-          },
-        }
-      );
+      // const response = await fetch(
+      //   `${API}/v1/rentals?limit=20&offset=${currentOffset}`,
+      //   {
+      //     headers: {
+      //       Authorization: `Bearer ${authToken}`,
+      //       "X-API-Key": API_KEY,
+      //     },
+      //   }
+      // );
+      const response = await apiFetch(
+  `/v1/rentals?limit=20&offset=${currentOffset}`,
+  {},
+  authToken
+);
 
       const data = await response.json();
 
@@ -509,15 +694,20 @@ function ProjectsPage({
       setLoading(true);
       setError("");
 
-      const response = await fetch(
-        `${API}/v1/projects?limit=20&offset=${currentOffset}`,
-        {
-          headers: {
-            Authorization: `Bearer ${authToken}`,
-            "X-API-Key": API_KEY,
-          },
-        }
-      );
+      // const response = await fetch(
+      //   `${API}/v1/projects?limit=20&offset=${currentOffset}`,
+      //   {
+      //     headers: {
+      //       Authorization: `Bearer ${authToken}`,
+      //       "X-API-Key": API_KEY,
+      //     },
+      //   }
+      // );
+      const response = await apiFetch(
+  `/v1/projects?limit=20&offset=${currentOffset}`,
+  {},
+  authToken
+);
 
       const data = await response.json();
 
@@ -684,15 +874,20 @@ function InsightsPage({
       setLoading(true);
       setError("");
 
-      const response = await fetch(
-        `${API}/v1/analytics/summary`,
-        {
-          headers: {
-            Authorization: `Bearer ${authToken}`,
-            "X-API-Key": API_KEY,
-          },
-        }
-      );
+      // const response = await fetch(
+      //   `${API}/v1/analytics/summary`,
+      //   {
+      //     headers: {
+      //       Authorization: `Bearer ${authToken}`,
+      //       "X-API-Key": API_KEY,
+      //     },
+      //   }
+      // );
+      const response = await apiFetch(
+  "/v1/analytics/summary",
+  {},
+  token
+);
 
       const data = await response.json();
 
@@ -815,15 +1010,20 @@ function SavedPage({
 
         const results = await Promise.all(
           savedListings.map(async (id) => {
-            const response = await fetch(
-              `${API}/v1/listings/${id}`,
-              {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                  "X-API-Key": API_KEY,
-                },
-              }
-            );
+            // const response = await fetch(
+            //   `${API}/v1/listings/${id}`,
+            //   {
+            //     headers: {
+            //       Authorization: `Bearer ${token}`,
+            //       "X-API-Key": API_KEY,
+            //     },
+            //   }
+            // );
+            const response = await apiFetch(
+  `/v1/listings/${id}`,
+  {},
+  token
+);
 
             if (!response.ok) {
               return null;
@@ -924,14 +1124,23 @@ function SavedPage({
                     </strong>
                   </div>
 
-                  <button
+                  {/* <button
                     className="save-button"
                     onClick={() =>
                       toggleSaved(listing.listing_id)
                     }
                   >
                     ♥ Remove
-                  </button>
+                  </button> */}
+                  <button
+  className="save-button saved"
+  onClick={() =>
+    toggleSaved(listing.listing_id)
+  }
+  title="Remove from saved listings"
+>
+  ♥ Saved
+</button>
                 </div>
               ))}
             </div>
@@ -1036,12 +1245,12 @@ function ListingDetail({
       </header>
 
       <main>
-        <button
+        {/* <button
           className="back-button"
           onClick={() => navigate(-1)}
         >
           ← Back to listings
-        </button>
+        </button> */}
 
         <div className="detail-card">
           <h2>
@@ -1176,12 +1385,26 @@ function LoginPage({ setToken }) {
         );
       }
 
-      sessionStorage.setItem(
-        "token",
-        data.access_token
-      );
+      // sessionStorage.setItem(
+      //   "token",
+      //   data.access_token
+      // );
 
-      setToken(data.access_token);
+      // setToken(data.access_token);
+      sessionStorage.setItem(
+  "token",
+  data.access_token
+);
+
+sessionStorage.setItem(
+  "refresh_token",
+  data.refresh_token
+);
+sessionStorage.setItem(
+  "user_email",
+  data.user.email
+);
+setToken(data.access_token);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -1241,10 +1464,16 @@ function App() {
     });
   }
 
+  // function logout() {
+  //   sessionStorage.removeItem("token");
+  //   setToken("");
+  // }
   function logout() {
-    sessionStorage.removeItem("token");
-    setToken("");
-  }
+  sessionStorage.removeItem("token");
+  sessionStorage.removeItem("refresh_token");
+  sessionStorage.removeItem("user_email");
+  setToken("");
+}
 
   return (
     <BrowserRouter>

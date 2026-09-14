@@ -1,0 +1,124 @@
+{
+  "api_key": "	IVY26-40E9E3017380",
+  "candidate": {
+    "name": "Neelam",
+    "email": "neelam.20233366@mnnit.ac.in",
+    "repo_url": "https://github.com/Neelam-3432/ivy-homes.git",
+    "demo_url": "YOUR_DEPLOYED_DEMO_URL"
+  },
+  "answers": {
+    "total_listing_records": 4100,
+    "unique_properties": 4100,
+    "active_listings": 3233,
+    "corrupt_listing_ids": [
+      "100-4000457",
+      "DWE-4001424",
+      "DWE-4002374",
+      "MAG-4000145",
+      "SQU-4002483",
+      "ZER-4000021",
+      "ZER-4001287",
+      "ZER-4001669",
+      "ZER-4001686"
+    ],
+    "total_monthly_rent": 5777900,
+    "avg_price_per_sqft_2bhk": 17330.28,
+    "costliest_project": {
+      "project_id": "P40231",
+      "price_max_inr": 99800000
+    },
+    "listings_last_7_days": 122,
+    "fake_listing_ids": [
+      "100-4000342",
+      "100-4000711",
+      "100-4001389",
+      "100-4001474",
+      "100-4001741",
+      "DWE-4001931",
+      "DWE-4003537",
+      "DWE-4003972",
+      "MAG-4000373",
+      "MAG-4003093",
+      "MAG-4003738",
+      "SQU-4000109",
+      "SQU-4000265",
+      "SQU-4002728",
+      "ZER-4001962",
+      "ZER-4002312"
+    ],
+    "projects_with_wrong_listing_count": 336
+  },
+  "findings": [
+    {
+      "endpoint": "/v1/listings",
+      "category": "pagination",
+      "documented": "page + limit pagination, maximum limit 200",
+      "actual": "offset + limit pagination; effective maximum page size is 50; page parameter appears ignored",
+      "how_found": "Compared page and offset requests and tested limit=200",
+      "impact": "Client must paginate using offset and handle 50 records per request",
+      "evidence": [
+        "page=1&offset=0 and page=2&offset=0 returned the same first listing",
+        "offset=5 returned different records",
+        "limit=200 returned 50 records"
+      ]
+    },
+    {
+      "endpoint": "/auth/login",
+      "category": "token expiry",
+      "documented": "access token expires in 86400 seconds",
+      "actual": "login response returned expires_in=900 seconds",
+      "how_found": "Inspected the login response",
+      "impact": "Frontend needs refresh-token handling for longer sessions",
+      "evidence": [
+        "expires_in=900"
+      ]
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "active listings",
+      "documented": "active listings only",
+      "actual": "Response included 867 listings with is_live=false",
+      "how_found": "Inspected is_live values across the retrieved listing dataset",
+      "impact": "Client-side filtering may be required when active-only data is expected",
+      "evidence": [
+        "4100 listings retrieved",
+        "3233 were live and 867 were not live"
+      ]
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "total count",
+      "documented": "API reported total=3746",
+      "actual": "4100 listing records were retrievable; offset=4100 returned 0 records",
+      "how_found": "Paginated through the listings using offset",
+      "impact": "The API total field should not be relied upon for dataset completeness",
+      "evidence": [
+        "API total=3746",
+        "offset=3746 still returned 50 records",
+        "offset=4100 returned 0 records"
+      ]
+    },
+    {
+      "endpoint": "/v1/analytics/summary",
+      "category": "endpoint availability",
+      "documented": "Analytics summary endpoint",
+      "actual": "GET request returned 404 Not Found",
+      "how_found": "Called the documented endpoint with authentication",
+      "impact": "The frontend cannot rely on this endpoint and currently displays a graceful unavailable state",
+      "evidence": [
+        "{\"detail\":\"Not Found\"}"
+      ]
+    },
+    {
+      "endpoint": "/v1/favourites",
+      "category": "saved listings",
+      "documented": "Favourite endpoint expected for saved listings",
+      "actual": "GET request returned 404 Not Found",
+      "how_found": "Called the endpoint with authentication",
+      "impact": "Saved listings are persisted per user in browser localStorage in the frontend",
+      "evidence": [
+        "{\"detail\":\"Not Found\"}"
+      ]
+    }
+  ]
+}
