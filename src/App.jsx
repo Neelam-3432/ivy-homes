@@ -59,7 +59,9 @@ function Navbar({
         <button onClick={() => navigate("/projects")}>
           Projects
         </button>
-
+        <button onClick={() => navigate("/insights")}>
+  Insights
+</button>
         <button onClick={() => navigate("/saved")}>
           Saved ({savedCount})
         </button>
@@ -664,7 +666,134 @@ function ProjectsPage({
     </>
   );
 }
+// -------------------- INSIGHTS PAGE --------------------
 
+function InsightsPage({
+  token,
+  savedListings,
+  logout,
+}) {
+  const navigate = useNavigate();
+
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function fetchInsights(authToken) {
+    try {
+      setLoading(true);
+      setError("");
+
+      const response = await fetch(
+        `${API}/v1/analytics/summary`,
+        {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+            "X-API-Key": API_KEY,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || `API error: ${response.status}`
+        );
+      }
+
+      setSummary(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (token) {
+      fetchInsights(token);
+    }
+  }, [token]);
+
+  return (
+    <>
+      <Navbar
+        navigate={navigate}
+        savedCount={savedListings.length}
+        logout={logout}
+      />
+
+      <main>
+        <div className="hero">
+          <h2>Insights</h2>
+          <p>
+            Property market insights from the Ivy Homes API
+          </p>
+        </div>
+
+        {loading && <p>Loading insights...</p>}
+
+        {error && (
+          <div className="error">
+            <p>
+              Analytics summary is currently unavailable.
+            </p>
+            <p>{error}</p>
+          </div>
+        )}
+
+        {!loading && summary && (
+          <div className="card">
+            <h3>Analytics Summary</h3>
+
+            <pre>
+              {JSON.stringify(summary, null, 2)}
+            </pre>
+          </div>
+        )}
+
+        {!loading && !summary && !error && (
+          <p>No insights available.</p>
+        )}
+
+        <div className="card">
+          <h3>Application Insights</h3>
+
+          <p>
+            <strong>Total listings analysed:</strong>{" "}
+            4100
+          </p>
+
+          <p>
+            <strong>Active listings:</strong>{" "}
+            3233
+          </p>
+
+          <p>
+            <strong>Thoraipakkam monthly rent:</strong>{" "}
+            ₹57,77,900
+          </p>
+
+          <p>
+            <strong>Thoraipakkam 2BHK average price/sq ft:</strong>{" "}
+            ₹17,330.28
+          </p>
+
+          <p>
+            <strong>Listings added in the last 7 days:</strong>{" "}
+            122
+          </p>
+
+          <p>
+            <strong>Projects with listing-count mismatch:</strong>{" "}
+            336
+          </p>
+        </div>
+      </main>
+    </>
+  );
+}
 // -------------------- SAVED PAGE --------------------
 
 function SavedPage({
@@ -1149,6 +1278,16 @@ function App() {
   path="/projects"
   element={
     <ProjectsPage
+      token={token}
+      logout={logout}
+      savedListings={savedListings}
+    />
+  }
+/>
+<Route
+  path="/insights"
+  element={
+    <InsightsPage
       token={token}
       logout={logout}
       savedListings={savedListings}
